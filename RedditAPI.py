@@ -80,7 +80,7 @@ class RedditAPI:
                 current_tries += 1
         return fire_away(url, headers, params)
 
-    def search(self, query, limit=100):
+    def search(self, query, size=100):
         """
         Search and return subreddits containing the 'query'.
         """
@@ -89,7 +89,7 @@ class RedditAPI:
         subreddits_df = pd.DataFrame()
         retrieved_cnt = 0
 
-        while retrieved_cnt < limit:
+        while retrieved_cnt < size:
             try:
                 subreddits = self.make_request(url=get_url, headers=self.headers, params=params)
                 temp_df = pd.DataFrame([x['data'] for x in subreddits['data']['children']])
@@ -116,20 +116,28 @@ class RedditAPI:
         Rretrieve the most recent threads (submissions) for a subreddit
         """
         get_url = f'https://oauth.reddit.com/r/{subreddit}/new'
-        params = {'limit': 100}
+        params = {'limit': 500, 'after': None}
         submissions_df = pd.DataFrame()
         retrieved_cnt = 0
+        retry = 5
 
         while retrieved_cnt < size:
             try:
                 submissions = self.make_request(get_url, headers=self.headers, params=params)
                 temp_df = pd.DataFrame([x['data'] for x in submissions['data']['children']])
                 submissions_df = pd.concat([submissions_df, temp_df])
-                params['after'] = submissions['data']['after']
                 retrieved_cnt = submissions_df.shape[0]
+                
+                p_after = submissions['data']['after']
 
-                if params['after'] is None:
+                if (retry > 0) and (p_after is None):
+                    self.connect()
+                    retry -= 1
+                    continue
+                elif p_after is None:
                     break
+                else:
+                    params['after'] = p_after
 
             except:
                 break
